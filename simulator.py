@@ -5,20 +5,21 @@ from scipy.constants import speed_of_light
 from typing import Optional
 
 
-def plot_complex_signal(signal_c:np.ndarray):
+def plot_complex_signal(signal_c):
     fig= go.Figure()
     fig.add_trace(go.Scatter(y=signal_c.real,name='Real'))
     fig.add_trace(go.Scatter(y=signal_c.imag,name='Imaginary'))
-    fig.show()
+    return fig
 
 def target_to_indices(target_range:float, 
                       target_velocity:float, 
+                      range_gate_res:float,
                       pri:float,
-                       fft_len:int,
-                       range_gate_res:float,
-                       doppler_bin_res:Optional[float]=None):
+                      fft_len:int,
+                      doppler_bin_res:Optional[float]):
     range_index = np.floor(target_range/range_gate_res)
-    doppler_index = np.floor(target_velocity/doppler_bin_res) if doppler_bin_res is not None else np.floor(target_velocity/(1/(pri*fft_len)))
+    f_d = 2*target_velocity/speed_of_light*3e9
+    doppler_index = np.floor(f_d/doppler_bin_res) if doppler_bin_res is not None else np.floor(f_d/(1/(pri*fft_len)))
     return int(range_index), int(doppler_index)
 
 # constants
@@ -36,18 +37,21 @@ dt = 1/f_sample
   
 
 # dwell parameters
+# dwell
+
+num_pulses = 256             # 10 [us]
+pri = 10e-6
+samples_in_pri = pri/dt
+cpi_duration =  pri * num_pulses
+prf = 1/pri
+
 # pulse_params
 lfm_bw = 10e6           # [Hz]
-num_pulses = 256
-pri = 10e-6             # 10 [us]
 duty_cycle = 5          # [%]
 pulse_duration = pri*duty_cycle/100
 lfm_slope = lfm_bw/pulse_duration
 samples_in_pulse = pulse_duration/dt
 
-samples_in_pri = pri/dt
-cpi_duration =  pri * num_pulses
-prf = 1/pri
 
 fft_len = 2**8
 range_gate_res = c/(2*lfm_bw)
@@ -218,10 +222,20 @@ fig=go.Figure(
         z=doppler_power_db
     )
 )
+range_gate_res_f_sampling=c/(2*f_sample)
+doppler_bin_res_f_sampling=prf/fft_len
+range_bin,doppler_bin=target_to_indices(target_range=target_range,
+                                        target_velocity=target_velocity,
+                                        range_gate_res=range_gate_res_f_sampling,
+                                        pri=pri,
+                                        fft_len=fft_len,
+                                        doppler_bin_res=doppler_bin_res_f_sampling)
+
 
 fig.add_trace(go.Scatter(
-    x=[np.round(target_range*2*f_sample/c-num_samples_pulse)],
-    y=[np.round( f_d/(prf/fft_len))],
+    x=[np.round(range_bin-num_samples_pulse)],
+    y=[np.round(doppler_bin)],
+    # y=[np.round( f_d/(prf/fft_len))],
     mode='markers',
     marker=dict(
         color='red',
