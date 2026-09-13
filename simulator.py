@@ -77,7 +77,16 @@ target_power = 10**(target_snr/10)*noise_var if target_snr is not None and targe
 
 target_amplitude = np.sqrt(target_power)  # [V]
 
-
+# interferes_params all lfm
+max_num_interferers = 5
+num_interferers = np.random.randint(0,max_num_interferers)
+min_interferer_num_pulses,max_interferer_num_pulses = 1, 10
+min_interferer_inr,max_interferer_inr = 0, 40
+min_interferer_delay,max_interferer_delay = 100, 2000
+min_interferer_pulse_duration,max_interferer_pulse_duration = 1e-6, 10e-6
+min_interferer_lfm_bw,max_interferer_lfm_bw = 1e6, 20e6
+min_interferer_pri,max_interferer_pri = 10e-6, 100e-6
+ 
 # pulse generation
 pulse_lin_t = np.linspace(0,pulse_duration,int(samples_in_pulse),endpoint=False)
 pulse_samples = pulse_amplitude*np.exp(1j*2*np.pi*lfm_slope*pulse_lin_t**2/2)
@@ -91,6 +100,33 @@ target_theta_offset = np.random.uniform(0,2*np.pi)
 matched_filter = np.conj(pulse_samples[::-1])
 num_samples_pulse = int(round(samples_in_pulse))
 num_samples_pri = int(round(samples_in_pri))
+overall_interferer_samples = np.zeros(len(dwell_lin_t),dtype=complex)
+for interferer_idx in range(num_interferers):
+    num_interferer_pulses = np.random.randint(min_interferer_num_pulses,max_interferer_num_pulses)
+    interferer_inr = np.random.uniform(min_interferer_inr,max_interferer_inr)
+    interferer_delay = np.random.uniform(min_interferer_delay,max_interferer_delay)*1e-9
+    interferer_pulse_duration = np.random.uniform(min_interferer_pulse_duration,max_interferer_pulse_duration)
+    interferer_lfm_bw = np.random.uniform(min_interferer_lfm_bw,max_interferer_lfm_bw)
+    interferer_lfm_slope = interferer_lfm_bw/interferer_pulse_duration
+    interferer_power = 10**(interferer_inr/10)*noise_var
+    interferer_amplitude = np.sqrt(interferer_power)
+    interferer_pri=np.random.uniform(min_interferer_pri,max_interferer_pri)
+    interferer_dwell_time=num_interferer_pulses*interferer_pri
+    assert interferer_dwell_time <= cpi_duration, "Interferer dwell time exceeds CPI duration"
+    interferer_dwell_samples = np.zeros(len(dwell_lin_t),dtype=complex)
+    interferer_lin_t = np.linspace(0,interferer_pri*num_interferer_pulses,int(interferer_pri*num_interferer_pulses/dt),endpoint=False)
+    interferer_pulse_lin_t = np.linspace(0,interferer_pulse_duration,int(interferer_pulse_duration/dt),endpoint=False)
+    # interferer_dwell_samples[:len(interferer_lin_t)] = interferer_amplitude*np.exp(1j*2*np.pi*interferer_lfm_slope*interferer_lin_t**2/2)
+    interferer_pulse_samples = interferer_amplitude*np.exp(1j*2*np.pi*interferer_lfm_slope*(interferer_pulse_lin_t)**2/2)
+    interferer_pri_samples = np.zeros(int(round(interferer_pri/dt)),dtype=complex)
+    interferer_pri_samples[:len(interferer_pulse_samples)] = interferer_pulse_samples
+    interferer_dwell_samples[:len(interferer_pri_samples)*num_interferer_pulses] = np.tile(interferer_pri_samples,num_interferer_pulses)
+    #apply interferer delay offset
+    interferer_delay_samples = int(round(interferer_delay/dt))
+    interferer_dwell_samples = np.roll(interferer_dwell_samples,interferer_delay_samples)
+    # TODO: add masking for interferer samples to avoid overlap with target and pulse samples
+    overall_interferer_samples += interferer_dwell_samples
+
 
 for pulse_idx in range(num_pulses):
 
@@ -173,6 +209,9 @@ for pulse_idx in range(num_pulses):
     dwell_mask[
         pulse_start_idx:pulse_start_idx + num_samples_pri
     ] += target_valid.astype(float)
+
+interfered_dwell_samples = dwell_samples + overall_interferer_samples
+
 
 compressed_full = (
     np.convolve(
