@@ -82,7 +82,7 @@ max_num_interferers = 5
 num_interferers = np.random.randint(0,max_num_interferers)
 min_interferer_num_pulses,max_interferer_num_pulses = 1, 10
 min_interferer_inr,max_interferer_inr = 0, 40
-min_interferer_delay,max_interferer_delay = 100, 2000
+min_interferer_delay,max_interferer_delay = 100, 2000 # [ns]
 min_interferer_pulse_duration,max_interferer_pulse_duration = 1e-6, 10e-6
 min_interferer_lfm_bw,max_interferer_lfm_bw = 1e6, 20e6
 min_interferer_pri,max_interferer_pri = 10e-6, 100e-6
@@ -101,6 +101,7 @@ matched_filter = np.conj(pulse_samples[::-1])
 num_samples_pulse = int(round(samples_in_pulse))
 num_samples_pri = int(round(samples_in_pri))
 overall_interferer_samples = np.zeros(len(dwell_lin_t),dtype=complex)
+interferers_array = np.zeros((num_interferers, len(dwell_lin_t)), dtype=complex)
 for interferer_idx in range(num_interferers):
     num_interferer_pulses = np.random.randint(min_interferer_num_pulses,max_interferer_num_pulses)
     interferer_inr = np.random.uniform(min_interferer_inr,max_interferer_inr)
@@ -125,6 +126,7 @@ for interferer_idx in range(num_interferers):
     interferer_delay_samples = int(round(interferer_delay/dt))
     interferer_dwell_samples = np.roll(interferer_dwell_samples,interferer_delay_samples)
     # TODO: add masking for interferer samples to avoid overlap with target and pulse samples
+    interferers_array[interferer_idx,:] += interferer_dwell_samples
     overall_interferer_samples += interferer_dwell_samples
 
 
